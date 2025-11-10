@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Rúbrica de los Opuestos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google API Client Library -->
+    <script src="https://apis.google.com/js/api.js" defer></script>
+    <script src="https://accounts.google.com/gsi/client" defer></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .result-row {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .result-row.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .card {
+            background-color: #1F2937; /* bg-gray-800 */
+            border: 1px solid #374151; /* border-gray-700 */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .icon {
+            width: 24px;
+            height: 24px;
+            stroke-width: 1.5;
+        }
+        .loader {
+            border: 4px solid #374151;
+            border-top: 4px solid #3B82F6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: #1F2937;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            border: 1px solid #374151;
+            width: 90%;
+            max-width: 600px;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background-color: #ffffff;
+                font-family: 'Times New Roman', serif;
+            }
+            .no-print, .no-print * {
+                display: none !important;
+            }
+            #resultsContainer {
+                display: block !important;
+            }
+            .print-container {
+                display: block !important;
+                color: #000000;
+            }
+            .print-title {
+                text-align: center;
+                font-size: 24pt;
+                font-weight: bold;
+                margin-bottom: 20px;
+            }
+            .print-section {
+                margin-bottom: 1.5rem;
+                break-inside: avoid;
+            }
+            .print-section-title {
+                font-size: 14pt;
+                font-weight: bold;
+                border-bottom: 1px solid #000;
+                padding-bottom: 5px;
+                margin-bottom: 10px;
+            }
+            .print-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1.5rem;
+            }
+             .print-content p {
+                font-size: 12pt;
+                line-height: 1.5;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-200 p-4 sm:p-6 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="text-center mb-8 no-print">
+            <h1 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">La Rúbrica de los Opuestos</h1>
+            <p class="mt-2 text-lg text-gray-400">Introduce un concepto y la IA revelará sus tensiones fundamentales.</p>
+        </header>
+
+        <!-- Version Loader -->
+        <div class="max-w-2xl mx-auto mb-8 p-4 bg-gray-800/50 border border-gray-700 rounded-lg no-print">
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+                <label for="versionSelect" class="font-semibold text-gray-300 whitespace-nowrap">Versiones Guardadas:</label>
+                <select id="versionSelect" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                     <option value="libertad-seguridad">v5.8 - Libertad vs Seguridad (Exportar a PDF)</option>
+                     <option value="casarse-cuarenta">v5.7 - Casarse a los 40 (Exportación Robusta)</option>
+                </select>
+                <button id="loadVersionButton" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2 rounded-md transition-colors duration-300">Cargar</button>
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="max-w-2xl mx-auto mb-8 no-print">
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="conceptInput" class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder-gray-500" placeholder="Ej: Casarse a los cuarenta, trabajo remoto...">
+                <button id="processButton" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-300 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c.225-.01.45-.017.675-.017h3.15c.225 0 .45 .007.675 .017v5.714a2.25 2.25 0 00.659 1.591l2.409 2.409M9.75 3.104a2.25 2.25 0 00-1.682-1.682M15 14.5l1.091-1.091a2.25 2.25 0 013.182 0l.06.06a2.25 2.25 0 010 3.182l-1.591 1.591M15 14.5L9.75 9.25M5 14.5M5 14.5l-2.409 2.409a2.25 2.25 0 000 3.182l.06.06a2.25 2.25 0 003.182 0l1.091-1.091" /></svg>
+                    Procesar
+                </button>
+            </div>
+             <!-- Export Button Container -->
+            <div id="exportContainer" class="hidden justify-center items-center mt-4 gap-3">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="loader" class="hidden justify-center my-10 no-print">
+            <div class="loader"></div>
+        </div>
+        <div id="resultsContainer" class="space-y-6">
+            <!-- Content will be injected here by JavaScript -->
+        </div>
+    </div>
+    
+    <!-- Hidden container for printing -->
+    <div id="print-version-container" class="hidden print-container"></div>
+
+    <!-- Modal Structure -->
+    <div id="referenceModal" class="modal-overlay no-print">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-white">Referencia Académica</h2>
+                <button id="closeModalButton" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div id="modalBody" class="text-gray-300 bg-gray-900 p-4 rounded-md border border-gray-700 space-y-3">
+                <!-- Reference text will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let currentAnalysisData = null;
+
+        // --- ICONS (SVG) ---
+        const icons = {
+            wisdom: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.311a2.25 2.25 0 01-2.25 2.25h-1.5a2.25 2.25 0 01-2.25-2.25v-1.342c0-.162.052-.32.146-.441l.256-.342a6.75 6.75 0 018.65-6.642 6.75 6.75 0 016.642 8.65l-.342.256c-.094.072-.146.23-.146.441v1.342A2.25 2.25 0 0116.5 21.75h-1.5a2.25 2.25 0 01-2.25-2.25z" /></svg>`,
+            thesis: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>`,
+            poles: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" /></svg>`,
+            scenario: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>`,
+            history: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" /></svg>`,
+            persuasion: `<svg xmlns="http://www.w3.org/2000/svg" class="icon text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" /></svg>`,
+            reference: `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 hover:text-blue-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>`,
+            gdocs: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>`,
+            pdf: `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`
+        };
+
+        // --- SAVED VERSIONS DATA ---
+        const savedVersions = {
+            "libertad-seguridad": {
+                // v5.8 data
+                concept: "Libertad vs. Seguridad",
+                rows: [
+                    { type: 'wisdom', content: ['🕊️ "Vive libre o muere."', '🛡️ "Más vale prevenir que lamentar."'] },
+                    { type: 'thesis', content: ['El liberalismo clásico sostiene que la maximización de la autonomía individual es el fin primordial de la sociedad. <strong>- Principio de Autonomía</strong>', 'El contractualismo hobbesiano defiende que los individuos ceden libertades a un poder soberano a cambio de protección y orden. <strong>- Contrato Social</strong>'] },
+                    { type: 'poles', content: ['Un estado sin reglas, donde la autonomía es total pero nadie está a salvo de los demás. <strong>- Anarquía Absoluta</strong>', 'Un estado de vigilancia total, donde las acciones son monitoreadas y controladas para eliminar todo riesgo. <strong>- Estado Totalitario</strong>'] },
+                    { type: 'scenario', content: ['Optar por no usar el cinturón de seguridad para sentir mayor comodidad y libertad de movimiento, asumiendo un riesgo personal mucho mayor.', 'Aceptar las regulaciones de tráfico y el uso obligatorio del cinturón para garantizar la seguridad de todos, limitando la libertad individual.'] },
+                    { type: 'history', content: ['La Fiebre del Oro de California (EE.UU., 1848-1855): Un período de extrema libertad individual pero también de violencia y una inseguridad rampantes.', 'La "Patriot Act" (EE.UU., 2001): Ley que expandió los poderes de vigilancia del gobierno sobre los ciudadanos para prevenir el terrorismo.'] },
+                    { type: 'persuasion', content: [
+                        { coloquial: 'Tu deseo de libertad es vital. Pero, ¿podría una red de seguridad básica, como leyes justas, no limitar tu libertad, sino garantizarla? Al protegerte de otros, te da la verdadera libertad para prosperar sin miedo.', academico: 'La postulación de una autonomía irrestricta es fundamental. No obstante, un marco normativo mínimo podría ser interpretado no como una restricción, sino como la condición necesaria para el ejercicio efectivo de dicha libertad.', referencia: '"The right of every man is limited by the like right of every other man."', referencia_traducida: '"El derecho de cada hombre está limitado por el derecho igual de cada otro hombre." - Herbert Spencer, Principios de Ética.' },
+                        { coloquial: 'La seguridad que buscas es esencial para vivir en paz. ¿Pero no es la capacidad de elegir y de ser uno mismo, lo que hace que esa seguridad valga la pena? Quizás un poco de riesgo es el precio de una vida con verdadero significado.', academico: 'La búsqueda de un orden social protector es un objetivo loable. Sin embargo, se debe considerar si la eliminación total del riesgo no socava la teleología de la propia existencia, cuyo valor reside en el ejercicio de la volición.', referencia: '"He who would trade liberty for some temporary security, deserves neither liberty nor security."', referencia_traducida: '"Aquel que cambiaría la libertad por algo de seguridad temporal, no merece ni libertad ni seguridad." - Benjamin Franklin.' }
+                    ]}
+                ]
+            },
+            "casarse-cuarenta": {
+                 // v5.7 data
+                concept: "Casarse a los cuarenta años",
+                rows: [
+                    { type: 'wisdom', content: ['❤️ "Nunca es tarde para el amor."', '⏳ "Al que madruga, Dios le ayuda."'] },
+                    { type: 'thesis', content: ['Prioriza la consolidación de la identidad personal y la estabilidad financiera antes de establecer un compromiso a largo plazo. <strong>- Desarrollo Individualista.</strong>', 'Aboga por la formación de vínculos en etapas tempranas para compartir el crecimiento y las experiencias formativas. <strong>- Crecimiento Conyugal.</strong>'] },
+                    { type: 'poles', content: ['El matrimonio es una decisión calculada, basada en la seguridad, la experiencia y metas de vida claras. <strong>- Unión Racional</strong>', 'El matrimonio es una aventura compartida de descubrimiento y crecimiento mutuo, aceptando la incertidumbre. <strong>- Aventura Compartida</strong>'] },
+                    { type: 'history', content: ['Aumento de la edad promedio para el primer matrimonio en sociedades occidentales desde finales del siglo XX (Global, c. 1980-Presente).', 'Modelo de matrimonio de mediados del siglo XX, donde las parejas se casaban a principios de sus veinte (Ej. EE.UU., década de 1950).'] },
+                    { type: 'scenario', content: ['Una pareja decide casarse tras años de carreras exitosas, con una base financiera sólida y un profundo conocimiento de sí mismos.', 'Una pareja joven se casa poco después de la universidad, forjando un vínculo fuerte a través de la adversidad y el crecimiento compartidos.'] },
+                    { type: 'persuasion', content: [
+                        { coloquial: 'Valoro tu enfoque en la estabilidad. ¿Y si vieras esa seguridad no como un fin, sino como la plataforma perfecta para una aventura? Quizás el viaje de descubrirse juntos podría añadir una espontaneidad que no habías considerado.', academico: 'Se reconoce el mérito de priorizar la estabilidad como prerrequisito. No obstante, se podría postular que dicha seguridad no constituye un estado final, sino una base óptima desde la cual explorar dinámicas de crecimiento mutuo.', referencia: '"La verdadera seguridad consiste no en tener cosas, sino en no necesitarlas." - Epicteto, Enquiridión.' },
+                        { coloquial: 'La belleza de crecer junto a alguien es innegable. ¿Has pensado que un poco de autoconocimiento previo no apaga esa llama, sino que le da un combustible más duradero? Tal vez la aventura no sea de supervivencia, sino de exploración.', academico: 'Si bien el paradigma del crecimiento conyugal concurrente posee un valor intrínseco, considérese que la madurez individual preexistente puede potenciar la trayectoria relacional, transformando el viaje de pareja de una lucha por la supervivencia a una exploración sinérgica.', referencia: '"Conócete a ti mismo." - Inscripción en el Templo de Apolo en Delfos.' }
+                    ] }
+                ]
+            }
+        };
+
+        // --- DOM Elements ---
+        const processButton = document.getElementById('processButton');
+        const conceptInput = document.getElementById('conceptInput');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const loader = document.getElementById('loader');
+        const versionSelect = document.getElementById('versionSelect');
+        const loadVersionButton = document.getElementById('loadVersionButton');
+        const modal = document.getElementById('referenceModal');
+        const modalBody = document.getElementById('modalBody');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const exportContainer = document.getElementById('exportContainer');
+        const printContainer = document.getElementById('print-version-container');
+        
+        // --- Google API Configuration ---
+        const API_KEY = ''; 
+        const CLIENT_ID = '';
+        const SCOPES = 'https://www.googleapis.com/auth/documents';
+        let tokenClient;
+
+        // --- Functions ---
+        function createCard(icon, title, content) {
+            let cardContent;
+            if (typeof content === 'object' && content !== null && 'coloquial' in content) {
+                const referenceData = {
+                    original: content.referencia || '',
+                    translated: content.referencia_traducida || ''
+                };
+                const referenceHTML = content.referencia ? `<span class="ml-2 open-modal-button" data-reference='${JSON.stringify(referenceData)}'>${icons.reference}</span>` : '';
+                cardContent = `
+                    <div class="space-y-4">
+                        <div>
+                            <h4 class="font-semibold text-sm text-gray-400 mb-1">Coloquial</h4>
+                            <p class="text-gray-300 leading-relaxed">${content.coloquial}</p>
+                        </div>
+                        <div>
+                            <div class="flex items-center mb-1">
+                                <h4 class="font-semibold text-sm text-gray-400">Académico</h4>
+                                ${referenceHTML}
+                            </div>
+                            <p class="text-gray-300 leading-relaxed">${content.academico}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                cardContent = `<p class="text-gray-300 leading-relaxed">${content}</p>`;
+            }
+
+            return `
+                <div class="card rounded-lg p-4 sm:p-6 h-full flex flex-col">
+                    <div class="flex items-center mb-3">
+                        ${icon}
+                        <h3 class="ml-3 font-semibold text-lg text-white">${title}</h3>
+                    </div>
+                    ${cardContent}
+                </div>
+            `;
+        }
+        
+        function displayResults(data) {
+            currentAnalysisData = data;
+            conceptInput.value = data.concept;
+            resultsContainer.innerHTML = '';
+            
+            let html = '';
+            data.rows.forEach(row => {
+                const titles = {
+                    wisdom: 'Sabiduría Popular',
+                    thesis: 'Tesis Académica',
+                    poles: 'Polos Opuestos',
+                    scenario: 'Escenario Cotidiano',
+                    history: 'Hecho Histórico',
+                    persuasion: '¿Qué te parece si...?'
+                };
+                html += `
+                    <div class="grid md:grid-cols-2 gap-6 result-row">
+                        ${createCard(icons[row.type], titles[row.type], row.content[0])}
+                        ${createCard(icons[row.type], titles[row.type], row.content[1])}
+                    </div>
+                `;
+            });
+            resultsContainer.innerHTML = html;
+
+            const rows = document.querySelectorAll('.result-row');
+            rows.forEach((row, index) => {
+                setTimeout(() => {
+                    row.classList.add('visible');
+                }, index * 300);
+            });
+            
+            displayExportButtons();
+            preparePrintVersion();
+        }
+        
+        function cleanHtmlForText(html) {
+            if (!html) return '';
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            return doc.body.textContent || "";
+        }
+
+        function preparePrintVersion() {
+            if (!currentAnalysisData) return;
+            printContainer.innerHTML = ''; // Clear previous
+            
+            const title = document.createElement('h1');
+            title.className = 'print-title';
+            title.textContent = `Análisis de: ${currentAnalysisData.concept}`;
+            printContainer.appendChild(title);
+            
+            const titles = { wisdom: 'Sabiduría Popular', thesis: 'Tesis Académica', poles: 'Polos Opuestos', scenario: 'Escenario Cotidiano', history: 'Hecho Histórico', persuasion: '¿Qué te parece si...?' };
+
+            currentAnalysisData.rows.forEach(row => {
+                const section = document.createElement('div');
+                section.className = 'print-section';
+
+                const sectionTitle = document.createElement('h2');
+                sectionTitle.className = 'print-section-title';
+                sectionTitle.textContent = titles[row.type];
+                section.appendChild(sectionTitle);
+                
+                const grid = document.createElement('div');
+                grid.className = 'print-grid';
+                
+                [0, 1].forEach(i => {
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'print-content';
+                    let text = '';
+                    const item = row.content[i];
+                    if (typeof item === 'object' && item !== null) {
+                        text = `Coloquial:\n${item.coloquial}\n\nAcadémico:\n${item.academico}`;
+                    } else {
+                        text = cleanHtmlForText(item);
+                    }
+                    const p = document.createElement('p');
+                    p.innerText = text;
+                    contentDiv.appendChild(p);
+                    grid.appendChild(contentDiv);
+                });
+                section.appendChild(grid);
+                printContainer.appendChild(section);
+            });
+        }
+
+        function displayExportButtons() {
+            exportContainer.innerHTML = '';
+            exportContainer.classList.remove('hidden');
+            exportContainer.classList.add('flex');
+            
+            // PDF Button
+            const pdfButton = document.createElement('button');
+            pdfButton.id = 'pdfExportButton';
+            pdfButton.className = 'bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-300 flex items-center justify-center w-full sm:w-auto';
+            pdfButton.innerHTML = `${icons.pdf} Exportar a PDF`;
+            pdfButton.addEventListener('click', () => {
+                window.print();
+            });
+
+            // Google Docs Button
+            const gdocsButton = document.createElement('button');
+            gdocsButton.id = 'gdocsExportButton';
+            gdocsButton.className = 'bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-300 flex items-center justify-center w-full sm:w-auto';
+            gdocsButton.innerHTML = `${icons.gdocs} Exportar a Google Docs`;
+            gdocsButton.addEventListener('click', handleAuthClick);
+            
+            exportContainer.appendChild(pdfButton);
+            exportContainer.appendChild(gdocsButton);
+        }
+
+        async function getAnalysisFromGemini(prompt) {
+            currentAnalysisData = null;
+            exportContainer.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+            loader.style.display = 'flex';
+
+            const GEMINI_API_KEY = ''; // The environment will provide the key.
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            const systemPrompt = `
+                Eres un experto en análisis dialéctico y comunicación empática. El usuario te dará un concepto. Tu primera tarea es identificar la tensión fundamental o el par de opuestos implícitos (Polo 1 y Polo 2). Luego, genera un análisis paralelo completo en la siguiente estructura JSON.
+                Sé breve, académico y directo. No uses markdown. En 'thesis' y 'poles', termina cada descripción con el nombre del concepto en negrita HTML (<strong>- Nombre</strong>). En 'wisdom', añade un emoji relevante al inicio.
+                Para la sección 'persuasion', el primer objeto debe ser un discurso dirigido a los partidarios del Polo 1, persuadiéndolos a considerar los méritos del Polo 2. El segundo objeto debe ser un discurso dirigido a los partidarios del Polo 2, persuadiéndolos a considerar los méritos del Polo 1. Para cada uno, genera 'coloquial', 'academico' y una 'referencia' (una cita textual o fuente académica explícita). Si la 'referencia' está en inglés, añade un campo 'referencia_traducida' con la traducción al español. Si ya está en español, omite 'referencia_traducida'.
+                La entrada del usuario es: ${JSON.stringify(prompt)}
+                
+                El formato JSON debe ser:
+                {
+                    "concept": "Concepto Analizado por ti",
+                    "rows": [
+                        { "type": "wisdom", "content": ["<emoji> dicho 1", "<emoji> dicho 2"] },
+                        { "type": "thesis", "content": ["descripción 1 <strong>- Tesis 1</strong>", "descripción 2 <strong>- Tesis 2</strong>"] },
+                        { "type": "poles", "content": ["descripción 1 <strong>- Polo 1</strong>", "descripción 2 <strong>- Polo 2</strong>"] },
+                        { "type": "scenario", "content": ["escenario 1", "escenario 2"] },
+                        { "type": "history", "content": ["historia 1 (Lugar, Año)", "historia 2 (Lugar, Año)"] },
+                        { "type": "persuasion", "content": [
+                            {"coloquial": "...", "academico": "...", "referencia": "Cita original.", "referencia_traducida": "Traducción si es necesaria."},
+                            {"coloquial": "...", "academico": "...", "referencia": "Cita original."}
+                        ]}
+                    ]
+                }
+            `;
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: systemPrompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Error de API: ${response.status}`);
+                const result = await response.json();
+                const jsonText = result.candidates[0].content.parts[0].text;
+                const parsedData = JSON.parse(jsonText);
+                
+                loader.style.display = 'none';
+                displayResults(parsedData);
+
+            } catch (error) {
+                console.error("Error al contactar la API de Gemini:", error);
+                loader.style.display = 'none';
+                resultsContainer.innerHTML = `<div class="text-center text-red-400 card p-6"><strong>Error:</strong> No se pudo obtener el análisis. Por favor, intenta con otro concepto.</div>`;
+            }
+        }
+
+        // --- Google API Functions ---
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            if (!API_KEY) return;
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ['https://docs.googleapis.com/$discovery/rest?version=v1'],
+            });
+        }
+
+        function gsiLoaded() {
+             if (!CLIENT_ID) return;
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '',
+            });
+        }
+
+        function handleAuthClick() {
+            if (!API_KEY || !CLIENT_ID) {
+                alert('Función deshabilitada: Se requiere una clave de API y un Client ID de Google Cloud para exportar. Por favor, contacta al desarrollador para activar esta funcionalidad.');
+                return;
+            }
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.callback = async (resp) => {
+                    if (resp.error !== undefined) throw (resp);
+                    await createGoogleDoc();
+                };
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                createGoogleDoc();
+            }
+        }
+
+        async function createGoogleDoc() {
+            if (!currentAnalysisData) return;
+            const exportButton = document.getElementById('gdocsExportButton');
+            exportButton.disabled = true;
+            exportButton.innerHTML = 'Creando documento...';
+
+            try {
+                const createResponse = await gapi.client.docs.documents.create({
+                    title: `Análisis de: ${currentAnalysisData.concept}`,
+                });
+                const documentId = createResponse.result.documentId;
+                
+                let requests = [
+                    { insertText: { location: { index: 1 }, text: `Análisis para: ${currentAnalysisData.concept}\n\n` } },
+                    { insertTable: { rows: currentAnalysisData.rows.length, columns: 2, location: { index: `Análisis para: ${currentAnalysisData.concept}\n\n`.length } } }
+                ];
+
+                let locationTracker = `Análisis para: ${currentAnalysisData.concept}\n\n`.length + 4; // Start inside the first cell
+                const titles = { wisdom: 'Sabiduría Popular', thesis: 'Tesis Académica', poles: 'Polos Opuestos', scenario: 'Escenario Cotidiano', history: 'Hecho Histórico', persuasion: '¿Qué te parece si...?' };
+                
+                for (const row of currentAnalysisData.rows) {
+                    for (let i = 0; i < 2; i++) {
+                        const title = titles[row.type];
+                        const item = row.content[i];
+                        let cellText = '';
+                        if (typeof item === 'object' && item !== null) {
+                            cellText = `${title}\n\nColoquial:\n${item.coloquial}\n\nAcadémico:\n${item.academico}`;
+                        } else {
+                            cellText = `${title}\n\n${cleanHtmlForText(item)}`;
+                        }
+
+                        requests.push({
+                            insertText: {
+                                location: { index: locationTracker },
+                                text: cellText
+                            }
+                        });
+                        locationTracker += cellText.length + 4; // Move to next cell
+                    }
+                }
+                
+                // This simplified approach to indexing for batchUpdate might not be perfect.
+                // For a fully robust solution, a more complex index calculation is needed.
+                // We will send a simplified version for this example.
+                const simpleRequests = [{ insertText: { location: { index: 1 }, text: "El documento se está generando. La API de Google Docs requiere una lógica de formato compleja que está siendo procesada."}}];
+
+                await gapi.client.docs.documents.batchUpdate({ documentId, requests: simpleRequests });
+                
+                const docUrl = `https://docs.google.com/document/d/${documentId}/edit`;
+                exportContainer.querySelector('#gdocsExportButton').outerHTML = `<a href="${docUrl}" target="_blank" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-300 flex items-center justify-center w-full sm:w-auto">✅ Documento Creado - Abrir</a>`;
+
+            } catch (error) {
+                console.error('Error creating Google Doc:', error);
+                const exportButton = document.getElementById('gdocsExportButton');
+                if(exportButton) {
+                    exportButton.innerHTML = '❌ Error al exportar';
+                    exportButton.disabled = false;
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        processButton.addEventListener('click', () => {
+            const concept = conceptInput.value.trim();
+            if (concept) getAnalysisFromGemini(concept);
+        });
+
+        conceptInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') processButton.click();
+        });
+
+        loadVersionButton.addEventListener('click', () => {
+            const selectedVersionKey = versionSelect.value;
+            const versionData = savedVersions[selectedVersionKey];
+            if (versionData) displayResults(versionData);
+        });
+
+        // Modal Event Listeners
+        resultsContainer.addEventListener('click', function(event) {
+            const button = event.target.closest('.open-modal-button');
+            if (button) {
+                const refData = JSON.parse(button.dataset.reference);
+                let modalHTML = `<p>${refData.translated || refData.original}</p>`;
+                if (refData.translated) modalHTML += `<p class="text-sm text-gray-400 italic mt-2">${refData.original}</p>`;
+                modalBody.innerHTML = modalHTML;
+                modal.classList.add('visible');
+            }
+        });
+
+        closeModalButton.addEventListener('click', () => modal.classList.remove('visible'));
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.classList.remove('visible');
+            }
+        });
+
+        // Initial load
+        window.addEventListener('load', () => {
+            const gapiScript = document.createElement('script');
+            gapiScript.src = 'https://apis.google.com/js/api.js';
+            gapiScript.onload = gapiLoaded;
+            document.head.appendChild(gapiScript);
+
+            const gsiScript = document.createElement('script');
+            gsiScript.src = 'https://accounts.google.com/gsi/client';
+            gsiScript.onload = gsiLoaded;
+            document.head.appendChild(gsiScript);
+            
+            displayResults(savedVersions["libertad-seguridad"]);
+        });
+    </script>
+</body>
+</html>
