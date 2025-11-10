@@ -413,8 +413,8 @@
             resultsContainer.innerHTML = '';
             loader.style.display = 'flex';
 
-            const GEMINI_API_KEY = ''; // The environment will provide the key.
-            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+            const API_KEY = "AIzaSyAXK_xEcFD0LX-jjIepTaQ37BgRvJwCNg0";
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
             const systemPrompt = `
                 Eres un experto en análisis dialéctico y comunicación empática. El usuario te dará un concepto. Tu primera tarea es identificar la tensión fundamental o el par de opuestos implícitos (Polo 1 y Polo 2). Luego, genera un análisis paralelo completo en la siguiente estructura JSON.
                 Sé breve, académico y directo. No uses markdown. En 'thesis' y 'poles', termina cada descripción con el nombre del concepto en negrita HTML (<strong>- Nombre</strong>). En 'wisdom', añade un emoji relevante al inicio.
@@ -616,3 +616,4 @@
 </body>
 
 </html>
+
